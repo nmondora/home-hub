@@ -5,8 +5,8 @@
 #include "TouchScreen.h"
 #include <Fonts/FreeSans12pt7b.h>
 #include "icon_bitmaps.h"
-#include <NTPClient.h>
-#include <WiFiUdp.h>
+//#include <NTPClient.h>
+//#include <WiFiUdp.h>
 
 // These are the four touchscreen analog pins
 #define YP A2  // must be an analog pin, use "An" notation!
@@ -41,7 +41,11 @@ TouchScreen ts = TouchScreen(XP, YP, XM, YM, 300);
 
 // Var used to control state switch
 uint8_t screen = 1;
-uint8_t oldscreen = 1;
+uint8_t oldscreen = 99;
+uint8_t updateMenu = 1;
+unsigned long lastTouched = 0;
+uint8_t screenTouched = 0;
+uint8_t beenAMin = 0;
 
 // Define colors
 uint16_t RUSH = 0xDD40;
@@ -56,8 +60,8 @@ int status = WL_IDLE_STATUS;
 WiFiServer server(80);
 WiFiClient client;
 // NTP client to fetch real time
-WiFiUDP ntpUDP;
-NTPClient timeClient(ntpUDP);
+//WiFiUDP ntpUDP;
+//NTPClient timeClient(ntpUDP);
 unsigned long lastMillis = 0;
 uint16_t intervalNTP = 60000; // Request NTP time every minute
 
@@ -71,7 +75,6 @@ boolean hueOn;  // on/off
 uint8_t hueBri;  // brightness value
 String command;  // Hue command
 boolean success = 0;
-char buttonPress = 'Z';
 uint16_t *colorBG;
 
 
@@ -96,7 +99,7 @@ void setup() {
   
   //Serial.println(F("Benchmark                Time (microseconds)"));
 
-  tft.setRotation(1);
+  //tft.setRotation(1);
 
   tft.fillScreen(NIGHTSKY);
   tft.drawBitmap(196, 96, bitmap_wifibad, 128, 128, RUSH);
@@ -127,7 +130,7 @@ void setup() {
     delay(10000);
   }
   //printWifiStatus();                        // you're connected now, so print out the status
-  timeClient.begin();
+//  timeClient.begin();
 
   Serial.println(F("Done!"));
 
@@ -138,6 +141,8 @@ void setup() {
 
 
 void loop(void) {
+  uint8_t buttonPress = 0;
+  
   // Retrieve a point  
   TSPoint p = ts.getPoint();
 
@@ -160,11 +165,33 @@ void loop(void) {
         screen = 1;
       }
 
+  if (screen == 2) {
+    colorBG = &RUSH;
+  } else {
+    colorBG = &NIGHTSKY;
+  }
 
   switch(screen) {
-    case 3:
+    case 10:
       if (oldscreen != screen) {
         oldscreen = screen;
+        analogWrite(5, 0);
+      }
+      delay(2000);
+    case 9:
+      if (oldscreen != screen) {
+        oldscreen = screen;
+        analogWrite(5, 20);
+      }
+      if (p.x > 0 & p.z > 300) {
+        screenTouched = 1;
+      }
+      break;
+    case 3:
+      if (oldscreen != screen) {
+        screenTouched = 1;
+        oldscreen = screen;
+        screenChangeMenu();
         tft.fillScreen(NIGHTSKY);
         tft.drawBitmap(141, 71, bitmap_cactus, 64, 64, RUSH);
         tft.drawBitmap(141, 196, bitmap_flag, 64, 64, RUSH);
@@ -174,23 +201,25 @@ void loop(void) {
 
       if (inRange(141, 205, p.y)) {
         if (inRange(61, 124, p.x)) {
-          buttonPress = 'F'; // flag
+          buttonPress = 9; // flag
           }
         else if (inRange(184, 248, p.x)) {
-          buttonPress = 'C'; // cactus
+          buttonPress = 7; // cactus
           }
       } else if (inRange(275, 339, p.y)) {
         if (inRange(61, 124, p.x)) {
-          buttonPress = 'B'; // bed
+          buttonPress = 10; // bed
         } else if (inRange(184, 248, p.x)) {
-          buttonPress = 'S'; // ceiling ('sky')
+          buttonPress = 8; // ceiling ('sky')
         }
       }
       
       break;
     case 2:
       if (oldscreen != screen) {
+        screenTouched = 1;
         oldscreen = screen;
+        screenChangeMenu();
         tft.fillScreen(RUSH);
         tft.drawBitmap(72, 71, bitmap_plane, 64, 64, NIGHTSKY);
         tft.drawBitmap(72, 196, bitmap_music, 64, 64, NIGHTSKY);
@@ -202,21 +231,21 @@ void loop(void) {
 
       if (inRange(72, 136, p.y)) {
         if (inRange(60, 124, p.x)) {
-          buttonPress = 'P'; // music scene
+          buttonPress = 4; // music scene
         } else if (inRange(184, 248, p.x)) {
-          buttonPress = 'A'; // airplane scene
+          buttonPress = 1; // airplane scene
         }
       } else if (inRange(208, 272, p.y)) {
         if (inRange(60, 124, p.x)) {
-          buttonPress = 'M'; // coffee (mug) scene
+          buttonPress = 5; // coffee (mug) scene
         } else if (inRange(184, 248, p.x)) {
-          buttonPress = 'T'; // moon (twillight) scene
+          buttonPress = 2; // moon (twillight) scene
         }
       } else if (inRange(344, 408, p.y)) {
         if (inRange(60, 124, p.x)) {
-          buttonPress = 'D'; // stars scene
+          buttonPress = 6; // stars scene
         } else if (inRange(184, 248, p.x)) {
-          buttonPress = 'K'; // shrimp scene
+          buttonPress = 3; // shrimp scene
         }
       }
 
@@ -224,8 +253,10 @@ void loop(void) {
     case 1:
       // Draw Screen 1
       if (oldscreen != screen) {
+        screenTouched = 1;
         oldscreen = screen;
         drawHome();
+        screenChangeMenu();
       }
     
       if (p.x > 270 && p.y < 50) {
@@ -239,12 +270,17 @@ void loop(void) {
       break;
   }
 
-  // draw home button
-  tft.drawBitmap(10, 10, bitmap_home, 24, 24, MOONDUST);
-  buttonPress = iPressedAButton(buttonPress);
+  //screenTouched = iPressedAButton(buttonPress);
+  iPressedAButton(buttonPress);
+  
+//  // draw home button
+//  tft.drawBitmap(10, 10, bitmap_home, 24, 24, MOONDUST);
 
-  if ((WiFi.status() == WL_CONNECTED & wifiCon == false) || oldscreen != screen) {
+  if ((WiFi.status() == WL_CONNECTED & wifiCon == false) || updateMenu == 1) {
+    // draw wifi connected icon
     tft.drawBitmap(446, 10, bitmap_wifi, 24, 24, MOONDUST);
+    // draw home button
+    tft.drawBitmap(10, 10, bitmap_home, 24, 24, MOONDUST);
     wifiCon = true;
   } else if (WiFi.status() != WL_CONNECTED & wifiCon == true) {
 //    if (screen == 1 || screen == 2) {
@@ -257,19 +293,46 @@ void loop(void) {
     tft.fillScreen(NIGHTSKY);
     tft.drawBitmap(196, 96, bitmap_wifibad, 128, 128, RUSH);
     wifiCon = false;
+
+    updateMenu = 0;
+  }
+
+  if (screenTouched == 1) {
+    lastTouched = millis();
+    if (screen >= 9) {
+      digitalWrite(5, HIGH);
+      if (screen == 10) {
+        screen = 1;
+      }
+      delay(500);
+    }
+    screenTouched = 0;
+    beenAMin = 0;
   }
 
   unsigned long currentMillis = millis();
 
-  if (currentMillis - lastMillis > intervalNTP) { // If a minute has passed since last NTP request
-    lastMillis = currentMillis;
-    Serial.println("\r\nSending NTP request ...");
-    timeClient.update();
-    tft.fillRect(339, 10, 100, 26, *colorBG);
-    tft.setCursor(340, 30);
-    //tft.println(timeClient.getHours() + ":" + timeClient.getMinutes());
-    tft.println(timeClient.getFormattedTime());
+  if (currentMillis - lastTouched > intervalNTP) { // if a minute has passed since last touch
+     if (beenAMin >= 5) {
+      screen = 10;
+     } else {
+      screen = 9;
+      beenAMin += 1;
+     }
+     lastTouched = millis();
   }
+
+//  if (currentMillis - lastMillis > intervalNTP || updateMenu == 1) { // If a minute has passed since last NTP request
+//    lastMillis = currentMillis;
+//    Serial.println("\r\nSending NTP request ...");
+//    timeClient.update();
+//    tft.fillRect(339, 10, 100, 26, *colorBG);
+//    tft.setCursor(340, 30);
+//    //tft.println(timeClient.getHours() + ":" + timeClient.getMinutes());
+//    tft.println(timeClient.getFormattedTime());
+//
+//    updateMenu = 0;
+//  }
   
 
 }
@@ -278,7 +341,9 @@ void loop(void) {
 
 
 
-
+  void screenChangeMenu(void){
+    updateMenu = 1;
+  }
 
 
 
@@ -359,7 +424,7 @@ boolean controlHue(uint8_t lightNum, String command, uint16_t *colorBG, bool mod
   uint8_t i = 0;
   if (client.connect(hueHubIP, hueHubPort))
   {
-    tft.drawBitmap(412, 10, bitmap_load, 24, 24, MOONDUST); // draw loading icon
+    tft.drawBitmap(446, 45, bitmap_load, 24, 24, MOONDUST); // draw loading icon
     while (client.connected() & i < 10) {
       if (mode == true) { // set Hue properties
         client.print("PUT /api/");
@@ -392,7 +457,7 @@ boolean controlHue(uint8_t lightNum, String command, uint16_t *colorBG, bool mod
         command += c;
       }
       client.stop();
-      tft.fillRect(411, 9, 26, 26, *colorBG);
+      tft.fillRect(445, 44, 26, 26, *colorBG);
     
       if (command[15] == 't') {
          return true;
@@ -401,7 +466,7 @@ boolean controlHue(uint8_t lightNum, String command, uint16_t *colorBG, bool mod
       }
     } else {
       client.stop();
-      tft.fillRect(411, 9, 26, 26, *colorBG);
+      tft.fillRect(445, 44, 26, 26, *colorBG);
       return true;
     }
     }
@@ -437,11 +502,11 @@ bool inRange(uint16_t low, uint16_t high, int16_t x)
  return (low <= x && x <= high);         
 }
 
-const char* iPressedAButton(char buttonPress) {
+const char* iPressedAButton(uint8_t buttonPress) {
   uint8_t lightNum = 0;
 
   switch (buttonPress) {
-    case 'A': // airplane scene
+    case 1: // airplane scene
       command = "{\"on\": true,\"hue\": 63175,\"sat\":241,\"bri\":96,\"transitiontime\":"+String(random(15,25))+"}";
       controlHue(1,command, &RUSH, true);
       command = "{\"on\": true,\"hue\": 60332,\"sat\":193,\"bri\":64,\"transitiontime\":"+String(random(15,25))+"}";
@@ -449,15 +514,13 @@ const char* iPressedAButton(char buttonPress) {
       command = "{\"on\": true,\"hue\": 59762,\"sat\":125,\"bri\":162,\"transitiontime\":"+String(random(15,25))+"}";
       controlHue(6,command, &RUSH, true);
       break;
-    case 'B': // bed light
+    case 10: // bed light
       lightNum = 6;
-      colorBG = &NIGHTSKY;
       break;
-    case 'C': // cactus light
+    case 7: // cactus light
       lightNum = 1;
-      colorBG = &NIGHTSKY;
       break;
-    case 'D': //stars scene
+    case 6: //stars scene
       command = "{\"on\": true,\"hue\": 46691,\"sat\":247,\"bri\":51,\"transitiontime\":"+String(random(15,25))+"}";
       controlHue(1,command, &RUSH, true);
       command = "{\"on\": true,\"hue\": 63834,\"sat\":82,\"bri\":51,\"transitiontime\":"+String(random(15,25))+"}";
@@ -465,11 +528,10 @@ const char* iPressedAButton(char buttonPress) {
       command = "{\"on\": true,\"hue\": 45470,\"sat\":225,\"bri\":51,\"transitiontime\":"+String(random(15,25))+"}";
       controlHue(6,command, &RUSH, true);
       break;
-    case 'F': //flag light
+    case 9: //flag light
       lightNum = 4;
-      colorBG = &NIGHTSKY;
       break;
-    case 'K': // shrimp scene
+    case 3: // shrimp scene
       command = "{\"on\": true,\"hue\": 43433,\"sat\":254,\"bri\":135,\"transitiontime\":"+String(random(15,25))+"}";
       controlHue(1,command, &RUSH, true);
       command = "{\"on\": true,\"hue\": 47090,\"sat\":254,\"bri\":135,\"transitiontime\":"+String(random(15,25))+"}";
@@ -477,7 +539,7 @@ const char* iPressedAButton(char buttonPress) {
       command = "{\"on\": true,\"hue\": 46329,\"sat\":254,\"bri\":135,\"transitiontime\":"+String(random(15,25))+"}";
       controlHue(6,command, &RUSH, true);
       break;
-    case 'M': // coffee scene
+    case 5: // coffee scene
       command = "{\"on\": true,\"hue\": 8410,\"sat\":140,\"bri\":254,\"transitiontime\":"+String(random(15,25))+"}";
       controlHue(1,command, &RUSH, true);
       command = "{\"on\": true,\"hue\": 8410,\"sat\":140,\"bri\":254,\"transitiontime\":"+String(random(15,25))+"}";
@@ -485,7 +547,7 @@ const char* iPressedAButton(char buttonPress) {
       command = "{\"on\": true,\"hue\": 8410,\"sat\":140,\"bri\":254,\"transitiontime\":"+String(random(15,25))+"}";
       controlHue(6,command, &RUSH, true);
       break;
-    case 'P': // music scene
+    case 4: // music scene
       command = "{\"on\": true,\"hue\": 50994,\"sat\":254,\"bri\":119,\"transitiontime\":"+String(random(15,25))+"}";
       controlHue(1,command, &RUSH, true);
       command = "{\"on\": true,\"hue\": 43289,\"sat\":254,\"bri\":119,\"transitiontime\":"+String(random(15,25))+"}";
@@ -493,11 +555,10 @@ const char* iPressedAButton(char buttonPress) {
       command = "{\"on\": true,\"hue\": 47779,\"sat\":253,\"bri\":119,\"transitiontime\":"+String(random(15,25))+"}";
       controlHue(6,command, &RUSH, true);
       break;
-    case 'S': //ceiling light
+    case 8: //ceiling light
       lightNum = 1;
-      colorBG = &NIGHTSKY;
       break;
-    case 'T':
+    case 2: // moon scene
       command = "{\"on\": true,\"hue\": 49424,\"sat\":252,\"bri\":157,\"transitiontime\":"+String(random(15,25))+"}";
       controlHue(1,command, &RUSH, true);
       command = "{\"on\": true,\"hue\": 35575,\"sat\":220,\"bri\":157,\"transitiontime\":"+String(random(15,25))+"}";
@@ -506,6 +567,8 @@ const char* iPressedAButton(char buttonPress) {
       controlHue(6,command, &RUSH, true);
       break;
   }
+
+  
 
   // if button is from devices pane, determine if light is on/off and change it
   if (lightNum != 0) {
@@ -522,7 +585,7 @@ const char* iPressedAButton(char buttonPress) {
 //  command = "{\"on\": true,\"hue\": 8410,\"sat\":140,\"bri\":254,\"transitiontime\":"+String(random(15,25))+"}";
 //  setHue(1,command);
   
-  return 'Z';
+  return 1;
 }
 
 void drawHome() {
