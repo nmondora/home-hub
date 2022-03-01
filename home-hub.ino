@@ -66,7 +66,7 @@ unsigned long lastMillis = 0;
 uint16_t intervalNTP = 60000; // Request NTP time every minute
 
 const char hueHubIP[] = "192.168.10.111";  // Hue hub IP
-const char hueUsername[] = "iFUcKu7nYaPZcP7VdcEQzIZwfqxgF8rhercudysT";  // Hue username
+const char hueUsername[] = "iFUcKxu7nYaPZcP7VdcEQzIZwfqxgF8rhercudysT";  // Hue username
 const uint8_t hueHubPort = 80;
 bool wifiCon = false;
 
@@ -129,7 +129,7 @@ void setup() {
     // wait 10 seconds for connection:
     delay(10000);
   }
-  //printWifiStatus();                        // you're connected now, so print out the status
+  printWifiStatus();                        // you're connected now, so print out the status
 //  timeClient.begin();
 
   Serial.println(F("Done!"));
@@ -156,10 +156,10 @@ void loop(void) {
   p.x = map(p.x, TS_MINX, TS_MAXX, 0, tft.height());
   p.y = map(p.y, TS_MINY, TS_MAXY, 0, tft.width());
 
-//  Serial.print("X = "); Serial.print(p.x);
-//  Serial.print("\tY = "); Serial.print(p.y);
-//  Serial.print("\tPressure = "); Serial.println(p.z);  
-//  delay(200);
+  Serial.print("X = "); Serial.print(p.x);
+  Serial.print("\tY = "); Serial.print(p.y);
+  Serial.print("\tPressure = "); Serial.println(p.z);  
+  delay(200);
 
   if (p.x > 270 && p.y < 50) {
         screen = 1;
@@ -270,8 +270,8 @@ void loop(void) {
       break;
   }
 
-  //screenTouched = iPressedAButton(buttonPress);
-  iPressedAButton(buttonPress);
+  screenTouched = iPressedAButton(buttonPress);
+  //iPressedAButton(buttonPress);
   
 //  // draw home button
 //  tft.drawBitmap(10, 10, bitmap_home, 24, 24, MOONDUST);
@@ -283,12 +283,12 @@ void loop(void) {
     tft.drawBitmap(10, 10, bitmap_home, 24, 24, MOONDUST);
     wifiCon = true;
   } else if (WiFi.status() != WL_CONNECTED & wifiCon == true) {
-//    if (screen == 1 || screen == 2) {
-//      colorBG = &NIGHTSKY;
-//    } else {
-//      colorBG = &RUSH;
-//    }
-//    tft.fillRect(445, 470, 9, 35, colorBG);
+    if (screen == 1 || screen == 2) {
+      colorBG = &NIGHTSKY;
+    } else {
+      colorBG = &RUSH;
+    }
+    tft.fillRect(445, 470, 9, 35, colorBG);
 
     tft.fillScreen(NIGHTSKY);
     tft.drawBitmap(196, 96, bitmap_wifibad, 128, 128, RUSH);
@@ -422,8 +422,10 @@ void loop(void) {
 
 boolean controlHue(uint8_t lightNum, String command, uint16_t *colorBG, bool mode) {
   uint8_t i = 0;
+  Serial.print("sucgma");
   if (client.connect(hueHubIP, hueHubPort))
   {
+    Serial.print("FUCK BITCH");
     tft.drawBitmap(446, 45, bitmap_load, 24, 24, MOONDUST); // draw loading icon
     while (client.connected() & i < 10) {
       if (mode == true) { // set Hue properties
@@ -469,6 +471,8 @@ boolean controlHue(uint8_t lightNum, String command, uint16_t *colorBG, bool mod
       tft.fillRect(445, 44, 26, 26, *colorBG);
       return true;
     }
+    } else{
+      return;
     }
 
 
@@ -477,25 +481,25 @@ boolean controlHue(uint8_t lightNum, String command, uint16_t *colorBG, bool mod
   
 }
 
-//void printWifiStatus() {
-//  // print the SSID of the network you're attached to:
-//  Serial.print("SSID: ");
-//  Serial.println(WiFi.SSID());
-//
-//  // print your board's IP address:
-//  IPAddress ip = WiFi.localIP();
-//  Serial.print("IP Address: ");
-//  Serial.println(ip);
-//
-//  // print the received signal strength:
-//  long rssi = WiFi.RSSI();
-//  Serial.print("signal strength (RSSI):");
-//  Serial.print(rssi);
-//  Serial.println(" dBm");
-//  // print where to go in a browser:
-//  Serial.print("To see this page in action, open a browser to http://");
-//  Serial.println(ip);
-//}
+void printWifiStatus() {
+  // print the SSID of the network you're attached to:
+  Serial.print("SSID: ");
+  Serial.println(WiFi.SSID());
+
+  // print your board's IP address:
+  IPAddress ip = WiFi.localIP();
+  Serial.print("IP Address: ");
+  Serial.println(ip);
+
+  // print the received signal strength:
+  long rssi = WiFi.RSSI();
+  Serial.print("signal strength (RSSI):");
+  Serial.print(rssi);
+  Serial.println(" dBm");
+  // print where to go in a browser:
+  Serial.print("To see this page in action, open a browser to http://");
+  Serial.println(ip);
+}
 
 bool inRange(uint16_t low, uint16_t high, int16_t x)        
 {        
