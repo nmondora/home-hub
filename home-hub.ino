@@ -1,4 +1,4 @@
-#include <SPI.h>
+//#include <SPI.h>
 #include <WiFiNINA.h>
 #include "Adafruit_GFX.h"
 #include "Adafruit_HX8357.h"
@@ -7,6 +7,7 @@
 #include "icon_bitmaps.h"
 //#include <NTPClient.h>
 //#include <WiFiUdp.h>
+#include <ArduinoJson.h>
 
 // These are the four touchscreen analog pins
 #define YP A2  // must be an analog pin, use "An" notation!
@@ -52,21 +53,21 @@ uint16_t RUSH = 0xDD40;
 uint16_t NIGHTSKY = 0x2124;
 uint16_t MOONDUST = 0xF77D;
 
-char ssid[] = "2.4 Aspire-UC126";        // your network SSID (name)
-char pass[] = "CXNK00597407";    // your network password (use for WPA, or use as key for WEP)
+//char ssid[] = "2.4 Aspire-UC126";        // your network SSID (name)
+//char pass[] = "CXNK00597407";    // your network password (use for WPA, or use as key for WEP)
 //int keyIndex = 0;                 // your network key index number (needed only for WEP)
 
-int status = WL_IDLE_STATUS;
-WiFiServer server(80);
-WiFiClient client;
+//int status = WL_IDLE_STATUS;
+//WiFiServer server(80);
+//WiFiClient client;
 // NTP client to fetch real time
 //WiFiUDP ntpUDP;
 //NTPClient timeClient(ntpUDP);
 unsigned long lastMillis = 0;
 uint16_t intervalNTP = 60000; // Request NTP time every minute
 
-const char hueHubIP[] = "192.168.10.111";  // Hue hub IP
-const char hueUsername[] = "iFUcKxu7nYaPZcP7VdcEQzIZwfqxgF8rhercudysT";  // Hue username
+//const char hueHubIP[] = "192.168.10.111";  // Hue hub IP
+//const char hueUsername[] = "iFUcKxu7nYaPZcP7VdcEQzIZwfqxgF8rhercudysT";  // Hue username
 const uint8_t hueHubPort = 80;
 bool wifiCon = false;
 
@@ -76,6 +77,10 @@ uint8_t hueBri;  // brightness value
 String command;  // Hue command
 boolean success = 0;
 uint16_t *colorBG;
+
+
+bool messageReady = false;
+String message = "";
 
 
 void setup() {
@@ -108,31 +113,31 @@ void setup() {
   tft.println("Version 0.9");
   
   // check for the WiFi module:
-  if (WiFi.status() == WL_NO_MODULE) {
-    //Serial.println("Communication with WiFi module failed!");
-    // don't continue
-    while (true);
-  }
-
-  String fv = WiFi.firmwareVersion();
-  if (fv < WIFI_FIRMWARE_LATEST_VERSION) {
-    //Serial.println("Please upgrade the firmware");
-  }
+//  if (WiFi.status() == WL_NO_MODULE) {
+//    //Serial.println("Communication with WiFi module failed!");
+//    // don't continue
+//    while (true);
+//  }
+//
+//  String fv = WiFi.firmwareVersion();
+//  if (fv < WIFI_FIRMWARE_LATEST_VERSION) {
+//    //Serial.println("Please upgrade the firmware");
+//  }
 
  // attempt to connect to WiFi network:
-  while (status != WL_CONNECTED) {
-    //Serial.print("Attempting to connect to Network named: ");
-    //Serial.println(ssid);                   // print the network name (SSID);
-
-    // Connect to WPA/WPA2 network. Change this line if using open or WEP network:
-    status = WiFi.begin(ssid, pass);
-    // wait 10 seconds for connection:
-    delay(10000);
-  }
-  printWifiStatus();                        // you're connected now, so print out the status
-//  timeClient.begin();
-
-  Serial.println(F("Done!"));
+//  while (status != WL_CONNECTED) {
+//    //Serial.print("Attempting to connect to Network named: ");
+//    //Serial.println(ssid);                   // print the network name (SSID);
+//
+//    // Connect to WPA/WPA2 network. Change this line if using open or WEP network:
+//    status = WiFi.begin(ssid, pass);
+//    // wait 10 seconds for connection:
+//    delay(10000);
+//  }
+//  printWifiStatus();                        // you're connected now, so print out the status
+////  timeClient.begin();
+//
+//  Serial.println(F("Done!"));
 
   // draw home screen
   drawHome();
@@ -421,65 +426,55 @@ void loop(void) {
 
 
 boolean controlHue(uint8_t lightNum, String command, uint16_t *colorBG, bool mode) {
-  uint8_t i = 0;
-  Serial.print("sucgma");
-  if (client.connect(hueHubIP, hueHubPort))
-  {
-    Serial.print("FUCK BITCH");
     tft.drawBitmap(446, 45, bitmap_load, 24, 24, MOONDUST); // draw loading icon
-    while (client.connected() & i < 10) {
+    
       if (mode == true) { // set Hue properties
-        client.print("PUT /api/");
-        client.print(hueUsername);
-        client.print("/lights/");
-        client.print(lightNum);  // hueLight zero based, add 1
-        client.println("/state HTTP/1.1");
-        client.println("keep-alive");
-        client.print("Host: ");
-        client.println(hueHubIP);
-        client.print("Content-Length: ");
-        client.println(command.length());
-        client.println("Content-Type: text/plain;charset=UTF-8");
-        client.println();  // blank line before body
-        client.println(command);  // Hue command
+        DynamicJsonDocument doc(1024);
+        doc["type"] = "request";
+        doc["lightNum"] = lightNum;
+        doc["command"] = command;
+        doc["pp"] = "set";
+        serializeJson(doc, Serial);
         
       } else { // get Hue properties
-        client.print("GET /api/");
-        client.print(hueUsername);
-        client.print("/lights/");
-        client.print(String(lightNum));
-        client.println();
-      }
-      i += 1;
+        DynamicJsonDocument doc(1024);
+        doc["type"] = "request";
+        doc["lightNum"] = lightNum;
+        doc["command"] = command;
+        doc["pp"] = "get";
+        serializeJson(doc, Serial);
       }
 
-    if (mode == false) {
-      while(client.available()) {
-        char c = client.read();
-        command += c;
-      }
-      client.stop();
+   
       tft.fillRect(445, 44, 26, 26, *colorBG);
-    
-      if (command[15] == 't') {
-         return true;
-      } else {
-        return false;
+      while(messageReady == false){
+        if(Serial.available()) {
+         message = Serial.readString();
+         messageReady = true;
+       }
+     }
+
+     if(messageReady) {
+      DeserializationError error = deserializeJson(doc, message);
+      if(error) {
+        Serial.print(F("deserializeJson() failed: "));
+        Serial.println(error.c_str());
+        messageReady = false;
+        return;
       }
-    } else {
-      client.stop();
-      tft.fillRect(445, 44, 26, 26, *colorBG);
-      return true;
-    }
-    } else{
-      return;
-    }
-
-
-
-
+      if(doc["type"] == "response") {
+        tft.fillRect(411, 9, 26, 26, *colorBG);  //end load icon
+        if(doc["reply"] == true) {
+          return true; //command executed
+        } else {
+          return false; // command failed
+        }
+      }   
+      }
   
-}
+    }
+
+
 
 void printWifiStatus() {
   // print the SSID of the network you're attached to:
